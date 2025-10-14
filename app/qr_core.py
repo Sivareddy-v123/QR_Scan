@@ -39,16 +39,19 @@ def _extract_urls(texts: List[str]) -> List[str]:
 def _opencv_decode_variants(img_rgb: np.ndarray, enable_preproc: bool) -> List[str]:
     if not OPENCV_AVAILABLE:
         return []
+    # Use the globally imported cv2
     det = cv2.QRCodeDetector()
     texts: List[str] = []
 
     def decode_any(arr):
+        # multi
         try:
             ok, decoded, _, _ = det.detectAndDecodeMulti(arr)
             if ok and decoded:
                 return [s for s in decoded if s]
         except Exception:
             pass
+        # single
         try:
             d, _, _ = det.detectAndDecode(arr)
             if d:
@@ -57,16 +60,17 @@ def _opencv_decode_variants(img_rgb: np.ndarray, enable_preproc: bool) -> List[s
             pass
         return []
 
+    # raw BGR first
     bgr = img_rgb[:, :, ::-1]
     texts += decode_any(bgr)
     if texts:
         return texts
 
     if enable_preproc:
-        import cv2
         gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-        thr = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                    cv2.THRESH_BINARY, 33, 2)
+        thr = cv2.adaptiveThreshold(
+            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 33, 2
+        )
         t = decode_any(thr)
         if t:
             return t
@@ -77,6 +81,7 @@ def _opencv_decode_variants(img_rgb: np.ndarray, enable_preproc: bool) -> List[s
             return t
 
     return texts
+
 
 def _pyzbar_decode(img_rgb: np.ndarray) -> List[str]:
     if not PYZBAR_AVAILABLE:
