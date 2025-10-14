@@ -1,9 +1,0 @@
-
-fastapi
-uvicorn[standard]
-PyMuPDF
-opencv-python
-numpy
-pillow
-python-multipart
-pyzbar
