@@ -68,10 +68,17 @@ def _opencv_decode_variants(img_rgb: np.ndarray, enable_preproc: bool) -> List[s
 
     if enable_preproc:
         gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-        thr = cv2.adaptiveThreshold(
-            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 33, 2
-        )
+        thr = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                cv2.THRESH_BINARY, 33, 2)
         t = decode_any(thr)
+        if t:
+            return t
+
+        # NEW: CLAHE + Otsu
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+        eq = clahe.apply(gray)
+        _, otsu = cv2.threshold(eq, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        t = decode_any(otsu)
         if t:
             return t
 
@@ -79,6 +86,7 @@ def _opencv_decode_variants(img_rgb: np.ndarray, enable_preproc: bool) -> List[s
         t = decode_any(up)
         if t:
             return t
+
 
     return texts
 
@@ -168,25 +176,32 @@ def extract_qr_urls_from_pdf_bytes(pdf_bytes: bytes, dpi: int = 250, preproc: bo
 def build_response_for_path(pdf_path: str, dpi: int = 250, preproc: bool = True,
                             include_text_fallback: bool = True) -> dict:
     path = Path(pdf_path)
-    urls, _ = extract_qr_urls_from_pdf_path(str(path), dpi=dpi, preproc=preproc,
-                                            include_text_fallback=include_text_fallback)
+    urls, per_page = extract_qr_urls_from_pdf_path(
+        str(path), dpi=dpi, preproc=preproc, include_text_fallback=include_text_fallback
+    )
     return {
         "File name": path.name,
         "URL": urls[0] if urls else None,
         "URLs": urls,
         "Count": len(urls),
+        "Source": "qr" if urls else ("text" if include_text_fallback else "none"),
+        "Details": {str(p): u for p, u in per_page.items()},
         "Status": "QR code available" if urls else "QR code not available",
     }
 
 def build_response_for_bytes(pdf_bytes: bytes, original_filename: str = "upload.pdf",
                              dpi: int = 250, preproc: bool = True,
                              include_text_fallback: bool = True) -> dict:
-    urls, _ = extract_qr_urls_from_pdf_bytes(pdf_bytes, dpi=dpi, preproc=preproc,
-                                             include_text_fallback=include_text_fallback)
+    urls, per_page = extract_qr_urls_from_pdf_bytes(
+        pdf_bytes, dpi=dpi, preproc=preproc, include_text_fallback=include_text_fallback
+    )
     return {
         "File name": original_filename,
         "URL": urls[0] if urls else None,
         "URLs": urls,
         "Count": len(urls),
+        "Source": "qr" if urls else ("text" if include_text_fallback else "none"),
+        "Details": {str(p): u for p, u in per_page.items()},
         "Status": "QR code available" if urls else "QR code not available",
     }
+
