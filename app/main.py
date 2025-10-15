@@ -5,7 +5,7 @@ from typing import Optional
 from pathlib import Path
 
 
-from qr_core import (  # adjust to 'app.qr_core' if your package layout requires it
+from app.qr_core import (  # adjust to 'app.qr_core' if your package layout requires it
     extract_qr_urls_from_pdf_bytes,
     extract_qr_urls_from_pdf_file,
 )
