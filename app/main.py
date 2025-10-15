@@ -1,15 +1,20 @@
-
+# main.py
 from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from pydantic import BaseModel, Field
 from typing import Optional
-from app.qr_core import build_response_for_path, build_response_for_bytes
 from pathlib import Path
+
+
+from qr_core import (  # adjust to 'app.qr_core' if your package layout requires it
+    extract_qr_urls_from_pdf_bytes,
+    extract_qr_urls_from_pdf_file,
+)
 
 app = FastAPI(title="PDF QR URL Extractor", version="1.2.0")
 
 class ExtractByPathRequest(BaseModel):
-    pdf_path: str = Field(..., description="Absolute or relative path to a PDF inside the service.")
-    dpi: Optional[int] = Field(250, ge=72, le=600)
+    pdf_path: str = Field(..., description="Absolute or relative path to a PDF.")
+    dpi: Optional[int] = Field(300, ge=72, le=1200)
     preproc: Optional[bool] = True
     text_fallback: Optional[bool] = True
 
@@ -25,33 +30,44 @@ def extract_by_path(req: ExtractByPathRequest):
     if p.suffix.lower() != ".pdf":
         raise HTTPException(status_code=400, detail="Only .pdf files are supported.")
     try:
-        return build_response_for_path(
+        # Uses the qr_core convenience wrapper
+        result = extract_qr_urls_from_pdf_file(
             str(p),
-            dpi=req.dpi or 250,
+            dpi=req.dpi or 300,
             preproc=bool(req.preproc),
             include_text_fallback=bool(req.text_fallback),
+            max_dpi=600,
         )
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process PDF: {e}")
 
 @app.post("/extract-by-upload")
+@app.post("/extract-by-upload")
 async def extract_by_upload(
     file: UploadFile = File(...),
-    dpi: int = Query(250, ge=72, le=600),
+    dpi: int = Query(300, ge=72, le=1200),
     preproc: bool = Query(True),
     text_fallback: bool = Query(True),
 ):
-    fname = file.filename or "upload.pdf"
-    if not fname.lower().endswith(".pdf"):
+    fname = (file.filename or "").lower()
+    if not fname.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Please upload a .pdf file.")
+
     try:
         pdf_bytes = await file.read()
-        return build_response_for_bytes(
+        result = extract_qr_urls_from_pdf_bytes(
             pdf_bytes,
-            original_filename=fname,
             dpi=dpi,
             preproc=preproc,
             include_text_fallback=text_fallback,
+            max_dpi=600,
         )
+
+        # return only the flattened list of URLs
+        urls = result.get("urls", [])
+        return {"urls": urls}
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process uploaded PDF: {e}")
+
